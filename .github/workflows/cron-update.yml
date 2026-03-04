@@ -1,0 +1,104 @@
+name: Daily Stats Update
+
+on:
+  schedule:
+    # 每天 UTC 0:00 执行（北京时间 8:00）
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 允许手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Update all repo stats
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // 读取 registry.json
+            let registry = [];
+            try {
+              const content = fs.readFileSync('registry.json', 'utf-8');
+              registry = JSON.parse(content);
+            } catch (e) {
+              console.log('registry.json 为空或不存在，跳过更新');
+              return;
+            }
+
+            if (registry.length === 0) {
+              console.log('没有注册的仓库，跳过更新');
+              return;
+            }
+
+            const stats = { lastUpdated: new Date().toISOString(), repos: {} };
+
+            // 遍历所有注册仓库，逐个拉取信息
+            for (const entry of registry) {
+              const [owner, repo] = entry.repoAddress.split('/');
+              if (!owner || !repo) continue;
+
+              console.log(`处理: ${entry.repoAddress}`);
+
+              try {
+                // 获取仓库信息
+                const { data: repoInfo } = await github.rest.repos.get({ owner, repo });
+
+                // 获取 manifest.json
+                let pluginCount = 0;
+                let languages = [];
+                try {
+                  const { data: manifestFile } = await github.rest.repos.getContent({
+                    owner, repo, path: 'manifest.json'
+                  });
+                  const decoded = Buffer.from(manifestFile.content, 'base64').toString('utf-8');
+                  const manifest = JSON.parse(decoded);
+                  if (Array.isArray(manifest)) {
+                    pluginCount = manifest.length;
+                    languages = [...new Set(manifest.map(e => e.language).filter(Boolean))];
+                  }
+                } catch (e) {
+                  console.log(`  ⚠️ 无法读取 manifest.json: ${e.message}`);
+                }
+
+                stats.repos[entry.repoAddress] = {
+                  authorName: repoInfo.owner.login,
+                  avatarUrl: repoInfo.owner.avatar_url,
+                  description: repoInfo.description || '',
+                  stars: repoInfo.stargazers_count,
+                  defaultBranch: repoInfo.default_branch,
+                  pluginCount,
+                  languages
+                };
+
+                console.log(`  ✅ Stars: ${repoInfo.stargazers_count}, 翻译数: ${pluginCount}`);
+              } catch (error) {
+                console.log(`  ❌ 获取失败: ${error.message}`);
+                // 仓库可能被删除，保留旧数据
+              }
+
+              // 简单限流：每个请求间隔 500ms
+              await new Promise(r => setTimeout(r, 500));
+            }
+
+            // 写入 stats.json
+            fs.writeFileSync('stats.json', JSON.stringify(stats, null, 2));
+            console.log(`\n✅ 共更新 ${Object.keys(stats.repos).length} 个仓库的统计数据`);
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add stats.json
+          git diff --staged --quiet || git commit -m "Daily stats update $(date -u +%Y-%m-%d)"
+          git push

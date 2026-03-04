@@ -1,0 +1,189 @@
+name: Approve and Register Translation Repo
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  label_new:
+    if: github.event.action == 'opened' && startsWith(github.event.issue.title, '[Register]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto Label New Request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              labels: ['申请收录']
+            });
+
+  approve:
+    if: github.event.action == 'labeled' && github.event.label.name == '同意收录'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Process Approval
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = context.payload.issue.number;
+            const title = context.payload.issue.title;
+
+            // 清理其他冲突标签
+            try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: '拒绝收录' }); } catch(e){}
+            try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: '取消收录' }); } catch(e){}
+            try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: '同意收录' }); } catch(e){}
+
+            const match = title.match(/\[Register\]\s*(.+)/);
+            if (!match) return;
+            const repoAddress = match[1].trim();
+            const parts = repoAddress.split('/');
+            if (parts.length !== 2) return;
+            const [targetOwner, targetRepo] = parts;
+
+            // 读取 registry
+            let registry = [];
+            try { registry = JSON.parse(fs.readFileSync('registry.json', 'utf-8')); } catch (e) {}
+
+            registry = registry.filter(r => r.repoAddress !== repoAddress);
+            registry.push({ repoAddress: repoAddress, registeredAt: new Date().toISOString() });
+
+            // 获取数据
+            let repoInfo;
+            try {
+              repoInfo = (await github.rest.repos.get({ owner: targetOwner, repo: targetRepo })).data;
+            } catch {
+              await github.rest.issues.createComment({ owner, repo, issue_number: issueNumber, body: `❌ 仓库 \`${repoAddress}\` 不存在或不可访问。` });
+              return;
+            }
+
+            let manifestData = [];
+            try {
+              const { data } = await github.rest.repos.getContent({ owner: targetOwner, repo: targetRepo, path: 'manifest.json' });
+              manifestData = JSON.parse(Buffer.from(data.content, 'base64').toString('utf-8'));
+              if (!Array.isArray(manifestData)) throw new Error('Not array');
+            } catch {
+              await github.rest.issues.createComment({ owner, repo, issue_number: issueNumber, body: `❌ 仓库 \`${repoAddress}\` 中未找到有效的 \`manifest.json\`。` });
+              return;
+            }
+
+            fs.writeFileSync('registry.json', JSON.stringify(registry, null, 2));
+
+            let stats = { lastUpdated: '', repos: {} };
+            try { stats = JSON.parse(fs.readFileSync('stats.json', 'utf-8')); } catch (e) {}
+            const languages = [...new Set(manifestData.map(e => e.language).filter(Boolean))];
+            stats.repos[repoAddress] = {
+              authorName: repoInfo.owner.login,
+              avatarUrl: repoInfo.owner.avatar_url,
+              description: repoInfo.description || '',
+              stars: repoInfo.stargazers_count,
+              defaultBranch: repoInfo.default_branch,
+              pluginCount: manifestData.length,
+              languages: languages
+            };
+            stats.lastUpdated = new Date().toISOString();
+            fs.writeFileSync('stats.json', JSON.stringify(stats, null, 2));
+
+            await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['已收录'] });
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: issueNumber,
+              body: `✅ **同意收录！** 仓库 \`${repoAddress}\` 已成功加入社区目录。\n\n📊 **最新数据**：\n- ⭐ Stars: ${repoInfo.stargazers_count}\n- 📦 翻译包: ${manifestData.length}\n- 🌍 涵盖语言: ${languages.join(', ')}`
+            });
+            await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'closed' });
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add registry.json stats.json
+          git diff --staged --quiet || git commit -m "Approve repo from issue #${{ github.event.issue.number }}"
+          git push
+
+  reject:
+    if: github.event.action == 'labeled' && github.event.label.name == '拒绝收录'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process Rejection
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = context.payload.issue.number;
+
+            try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: '同意收录' }); } catch(e){}
+            try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: '取消收录' }); } catch(e){}
+            try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: '拒绝收录' }); } catch(e){}
+
+            await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['已拒绝'] });
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: issueNumber,
+              body: '❌ **拒绝收录**。您的翻译仓库未能通过审核。'
+            });
+            await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'closed' });
+
+  remove:
+    if: github.event.action == 'labeled' && github.event.label.name == '取消收录'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Process Removal
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = context.payload.issue.number;
+            const title = context.payload.issue.title;
+
+            try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: '同意收录' }); } catch(e){}
+            try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: '拒绝收录' }); } catch(e){}
+            try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: '取消收录' }); } catch(e){}
+
+            const match = title.match(/\[Register\]\s*(.+)/);
+            if (!match) return;
+            const repoAddress = match[1].trim();
+
+            let registry = [];
+            try { registry = JSON.parse(fs.readFileSync('registry.json', 'utf-8')); } catch (e) {}
+            registry = registry.filter(r => r.repoAddress !== repoAddress);
+            fs.writeFileSync('registry.json', JSON.stringify(registry, null, 2));
+
+            let stats = { lastUpdated: '', repos: {} };
+            try { stats = JSON.parse(fs.readFileSync('stats.json', 'utf-8')); } catch (e) {}
+            if (stats.repos[repoAddress]) delete stats.repos[repoAddress];
+            stats.lastUpdated = new Date().toISOString();
+            fs.writeFileSync('stats.json', JSON.stringify(stats, null, 2));
+
+            await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['已取消'] });
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: issueNumber,
+              body: `⏸️ **已取消收录**。该仓库已被管理员从社区目录中移除。`
+            });
+            await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'closed' });
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add registry.json stats.json
+          git diff --staged --quiet || git commit -m "Remove repo from issue #${{ github.event.issue.number }}"
+          git push
