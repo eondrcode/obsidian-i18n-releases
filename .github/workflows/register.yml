@@ -45,8 +45,8 @@ jobs:
             const issueNumber = context.payload.issue.number;
             const title = context.payload.issue.title;
 
-            // 移除所有相关的过程标签和其他状态，只保留【已经收录】
-            for (const label of ['申请收录', '同意收录', '拒绝收录', '取消收录', '已经拒绝', '已经取消']) {
+            // 移除所有相关的过程标签和其他状态，只保留【已收录】
+            for (const label of ['申请收录', '同意收录', '拒绝收录', '取消收录', '已拒绝', '已取消']) {
               try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: label }); } catch(e){}
             }
 
@@ -100,7 +100,7 @@ jobs:
             stats.lastUpdated = new Date().toISOString();
             fs.writeFileSync('stats.json', JSON.stringify(stats, null, 2));
 
-            await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['已经收录'] });
+            await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['已收录'] });
             await github.rest.issues.createComment({
               owner, repo, issue_number: issueNumber,
               body: `✅ **同意收录！** 仓库 \`${repoAddress}\` 已成功加入社区目录。\n\n📊 **最新数据**：\n- ⭐ Stars: ${repoInfo.stargazers_count}\n- 📦 翻译包: ${manifestData.length}\n- 🌍 涵盖语言: ${languages.join(', ')}`
@@ -127,12 +127,12 @@ jobs:
             const repo = context.repo.repo;
             const issueNumber = context.payload.issue.number;
 
-            // 移除所有相关的过程标签和其他状态，只保留【已经拒绝】
-            for (const label of ['申请收录', '同意收录', '拒绝收录', '取消收录', '已经收录', '已经取消']) {
+            // 移除所有相关的过程标签和其他状态，只保留【已拒绝】
+            for (const label of ['申请收录', '同意收录', '拒绝收录', '取消收录', '已收录', '已取消']) {
               try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: label }); } catch(e){}
             }
 
-            await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['已经拒绝'] });
+            await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['已拒绝'] });
             await github.rest.issues.createComment({
               owner, repo, issue_number: issueNumber,
               body: '❌ **拒绝收录**。您的翻译仓库未能通过审核。'
@@ -155,8 +155,8 @@ jobs:
             const issueNumber = context.payload.issue.number;
             const title = context.payload.issue.title;
 
-            // 移除所有相关的过程标签和其他状态，只保留【已经取消】
-            for (const label of ['申请收录', '同意收录', '拒绝收录', '取消收录', '已经收录', '已经拒绝']) {
+            // 移除所有相关的过程标签和其他状态，只保留【已取消】
+            for (const label of ['申请收录', '同意收录', '拒绝收录', '取消收录', '已收录', '已拒绝']) {
               try { await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumber, name: label }); } catch(e){}
             }
 
@@ -175,7 +175,7 @@ jobs:
             stats.lastUpdated = new Date().toISOString();
             fs.writeFileSync('stats.json', JSON.stringify(stats, null, 2));
 
-            await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['已经取消'] });
+            await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumber, labels: ['已取消'] });
             await github.rest.issues.createComment({
               owner, repo, issue_number: issueNumber,
               body: `⏸️ **已取消收录**。该仓库已被管理员从社区目录中移除。`
