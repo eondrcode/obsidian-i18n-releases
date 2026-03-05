@@ -2,8 +2,8 @@ name: Daily Stats Update
 
 on:
   schedule:
-    # 每天 UTC 0:00 执行（北京时间 8:00）
-    - cron: '0 0 * * *'
+    # 每天 UTC 1:00 执行（北京时间 9:00）
+    - cron: '0 1 * * *'
   workflow_dispatch: # 允许手动触发
 
 permissions:
@@ -20,13 +20,13 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Update all repo stats
+      - name: Generate comprehensive stats
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
 
-            // 读取 registry.json
+            // ========== 1. 读取 registry.json ==========
             let registry = [];
             try {
               const content = fs.readFileSync('registry.json', 'utf-8');
@@ -41,22 +41,48 @@ jobs:
               return;
             }
 
-            const stats = { lastUpdated: new Date().toISOString(), repos: {} };
+            const stats = {
+              lastUpdated: new Date().toISOString(),
+              repos: {},
+              leaderboard: {
+                topReposByStars: [],
+                topReposByActivity: [],
+                topAuthors: []
+              },
+              summary: {
+                totalRepos: 0,
+                totalPlugins: 0,
+                totalTranslations: 0,
+                totalContributors: 0,
+                totalStars: 0,
+                languageDistribution: {}
+              }
+            };
 
-            // 遍历所有注册仓库，逐个拉取信息
+            // 用于汇总的中间变量
+            const allPluginIds = new Set();
+            const allContributorLogins = new Set();
+            const authorAgg = new Map(); // authorName -> aggregated data
+
+            // 30 天前的 ISO 时间（用于查询近 30 天 commits）
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+            // ========== 2. 遍历所有注册仓库 ==========
             for (const entry of registry) {
               const [owner, repo] = entry.repoAddress.split('/');
               if (!owner || !repo) continue;
 
-              console.log(`处理: ${entry.repoAddress}`);
+              console.log(`\n📦 处理: ${entry.repoAddress}`);
 
               try {
-                // 获取仓库信息
+                // ---- 2a. 获取仓库基本信息 ----
                 const { data: repoInfo } = await github.rest.repos.get({ owner, repo });
 
-                // 获取 manifest.json
+                // ---- 2b. 获取 manifest.json ----
                 let pluginCount = 0;
                 let languages = [];
+                let pluginIds = [];
+                let lastManifestUpdate = '';
                 try {
                   const { data: manifestFile } = await github.rest.repos.getContent({
                     owner, repo, path: 'manifest.json'
@@ -66,39 +92,236 @@ jobs:
                   if (Array.isArray(manifest)) {
                     pluginCount = manifest.length;
                     languages = [...new Set(manifest.map(e => e.language).filter(Boolean))];
+                    pluginIds = [...new Set(manifest.map(e => e.plugin).filter(Boolean))];
+
+                    // 从 manifest 条目中找到最新的 updated_at
+                    const dates = manifest
+                      .map(e => e.updated_at)
+                      .filter(Boolean)
+                      .sort()
+                      .reverse();
+                    lastManifestUpdate = dates[0] || '';
                   }
                 } catch (e) {
                   console.log(`  ⚠️ 无法读取 manifest.json: ${e.message}`);
                 }
 
-                stats.repos[entry.repoAddress] = {
-                  authorName: repoInfo.owner.login,
-                  avatarUrl: repoInfo.owner.avatar_url,
-                  description: repoInfo.description || '',
-                  stars: repoInfo.stargazers_count,
-                  defaultBranch: repoInfo.default_branch,
+                // ---- 2c. 获取近 30 天 commit 数量 ----
+                let recentCommits30d = 0;
+                try {
+                  const { data: commits } = await github.rest.repos.listCommits({
+                    owner, repo, since: thirtyDaysAgo, per_page: 100
+                  });
+                  recentCommits30d = commits.length;
+                } catch (e) {
+                  console.log(`  ⚠️ 无法读取 commits: ${e.message}`);
+                }
+
+                // ---- 2d. 获取贡献者数量 ----
+                let totalContributors = 0;
+                const contributorLogins = [];
+                try {
+                  const { data: contributors } = await github.rest.repos.listContributors({
+                    owner, repo, per_page: 100
+                  });
+                  totalContributors = contributors.length;
+                  for (const c of contributors) {
+                    if (c.login) {
+                      contributorLogins.push(c.login);
+                      allContributorLogins.add(c.login);
+                    }
+                  }
+                } catch (e) {
+                  console.log(`  ⚠️ 无法读取贡献者: ${e.message}`);
+                }
+
+                // ---- 2e. 计算活跃度分数 ----
+                const activityScore = calculateActivityScore({
                   pluginCount,
-                  languages
+                  lastPushedAt: repoInfo.pushed_at,
+                  recentCommits30d,
+                  stars: repoInfo.stargazers_count,
+                  forks: repoInfo.forks_count,
+                  isArchived: repoInfo.archived
+                });
+
+                // ---- 2f. 构建完整的仓库状态记录 ----
+                const repoStats = {
+                  // 作者信息
+                  authorName: repoInfo.owner.login,
+                  authorId: repoInfo.owner.id,
+                  avatarUrl: repoInfo.owner.avatar_url,
+                  authorType: repoInfo.owner.type,        // 'User' 或 'Organization'
+                  authorHtmlUrl: repoInfo.owner.html_url,
+
+                  // 仓库基本信息
+                  repoName: repoInfo.name,
+                  repoFullName: repoInfo.full_name,
+                  description: repoInfo.description || '',
+                  htmlUrl: repoInfo.html_url,
+                  defaultBranch: repoInfo.default_branch,
+                  license: repoInfo.license?.spdx_id || null,
+                  topics: repoInfo.topics || [],
+                  isArchived: repoInfo.archived,
+                  isFork: repoInfo.fork,
+                  repoSize: repoInfo.size,
+
+                  // 仓库指标
+                  stars: repoInfo.stargazers_count,
+                  forks: repoInfo.forks_count,
+                  watchers: repoInfo.watchers_count,
+                  openIssuesCount: repoInfo.open_issues_count,
+
+                  // 时间戳
+                  repoCreatedAt: repoInfo.created_at,
+                  repoUpdatedAt: repoInfo.updated_at,
+                  lastPushedAt: repoInfo.pushed_at,
+
+                  // 活跃度数据
+                  recentCommits30d,
+                  totalContributors,
+                  activityScore,
+
+                  // Manifest 摘要
+                  pluginCount,
+                  languages,
+                  pluginIds,
+                  lastManifestUpdate
                 };
 
-                console.log(`  ✅ Stars: ${repoInfo.stargazers_count}, 翻译数: ${pluginCount}`);
+                stats.repos[entry.repoAddress] = repoStats;
+
+                // ---- 2g. 更新汇总数据 ----
+                stats.summary.totalStars += repoInfo.stargazers_count;
+                stats.summary.totalTranslations += pluginCount;
+                for (const pid of pluginIds) allPluginIds.add(pid);
+                for (const lang of languages) {
+                  stats.summary.languageDistribution[lang] =
+                    (stats.summary.languageDistribution[lang] || 0) + pluginCount;
+                }
+
+                // ---- 2h. 聚合作者数据 ----
+                const authorName = repoInfo.owner.login;
+                if (!authorAgg.has(authorName)) {
+                  authorAgg.set(authorName, {
+                    name: authorName,
+                    avatarUrl: repoInfo.owner.avatar_url,
+                    htmlUrl: repoInfo.owner.html_url,
+                    totalPlugins: 0,
+                    totalStars: 0,
+                    repoCount: 0,
+                    languages: new Set(),
+                    activityScores: [],
+                    lastActiveAt: ''
+                  });
+                }
+                const agg = authorAgg.get(authorName);
+                agg.totalPlugins += pluginCount;
+                agg.totalStars += repoInfo.stargazers_count;
+                agg.repoCount += 1;
+                for (const lang of languages) agg.languages.add(lang);
+                agg.activityScores.push(activityScore);
+                if (!agg.lastActiveAt || repoInfo.pushed_at > agg.lastActiveAt) {
+                  agg.lastActiveAt = repoInfo.pushed_at;
+                }
+
+                console.log(`  ✅ Stars: ${repoInfo.stargazers_count}, 翻译数: ${pluginCount}, 活跃度: ${activityScore.toFixed(2)}`);
               } catch (error) {
                 console.log(`  ❌ 获取失败: ${error.message}`);
-                // 仓库可能被删除，保留旧数据
               }
 
-              // 简单限流：每个请求间隔 500ms
-              await new Promise(r => setTimeout(r, 500));
+              // 限流：每个仓库间隔 800ms
+              await new Promise(r => setTimeout(r, 800));
             }
 
-            // 写入 stats.json
+            // ========== 3. 计算排行榜 ==========
+            const repoEntries = Object.entries(stats.repos);
+
+            // 按 Star 排序
+            stats.leaderboard.topReposByStars = repoEntries
+              .sort((a, b) => b[1].stars - a[1].stars)
+              .slice(0, 10)
+              .map(([addr]) => addr);
+
+            // 按活跃度排序
+            stats.leaderboard.topReposByActivity = repoEntries
+              .sort((a, b) => b[1].activityScore - a[1].activityScore)
+              .slice(0, 10)
+              .map(([addr]) => addr);
+
+            // 活跃译者排行
+            stats.leaderboard.topAuthors = Array.from(authorAgg.values())
+              .map(a => ({
+                name: a.name,
+                avatarUrl: a.avatarUrl,
+                htmlUrl: a.htmlUrl,
+                totalPlugins: a.totalPlugins,
+                totalStars: a.totalStars,
+                repoCount: a.repoCount,
+                languages: [...a.languages],
+                // 作者活跃度 = 所有仓库活跃度的加权平均（最高分仓库权重更大）
+                activityScore: a.activityScores.length > 0
+                  ? a.activityScores.sort((x, y) => y - x).reduce((sum, s, i) => sum + s * (1 / (i + 1)), 0)
+                    / a.activityScores.reduce((sum, _, i) => sum + 1 / (i + 1), 0)
+                  : 0,
+                lastActiveAt: a.lastActiveAt
+              }))
+              .sort((a, b) => b.activityScore - a.activityScore || b.totalPlugins - a.totalPlugins)
+              .slice(0, 10);
+
+            // ========== 4. 填充汇总 ==========
+            stats.summary.totalRepos = Object.keys(stats.repos).length;
+            stats.summary.totalPlugins = allPluginIds.size;
+            stats.summary.totalContributors = allContributorLogins.size;
+
+            // ========== 5. 写入 stats.json ==========
             fs.writeFileSync('stats.json', JSON.stringify(stats, null, 2));
-            console.log(`\n✅ 共更新 ${Object.keys(stats.repos).length} 个仓库的统计数据`);
+            console.log(`\n✅ 共更新 ${stats.summary.totalRepos} 个仓库的统计数据`);
+            console.log(`   翻译插件: ${stats.summary.totalPlugins}, 翻译条目: ${stats.summary.totalTranslations}`);
+            console.log(`   贡献者: ${stats.summary.totalContributors}, 总 Star: ${stats.summary.totalStars}`);
+
+            // ========== 活跃度评分算法 ==========
+            function calculateActivityScore({ pluginCount, lastPushedAt, recentCommits30d, stars, forks, isArchived }) {
+              if (isArchived) return 0;
+
+              // 1. 翻译数量得分 (权重 30%) — 50 个翻译满分
+              const pluginScore = Math.min(pluginCount / 50, 1);
+
+              // 2. 更新时效得分 (权重 30%) — 时间衰减
+              let freshnessScore = 0;
+              if (lastPushedAt) {
+                const daysSincePush = (Date.now() - new Date(lastPushedAt).getTime()) / (1000 * 60 * 60 * 24);
+                if (daysSincePush <= 7) freshnessScore = 1.0;
+                else if (daysSincePush <= 30) freshnessScore = 0.7;
+                else if (daysSincePush <= 90) freshnessScore = 0.4;
+                else if (daysSincePush <= 180) freshnessScore = 0.2;
+                else freshnessScore = 0.05;
+              }
+
+              // 3. 近期提交得分 (权重 20%) — 30 天内 20 次提交满分
+              const commitScore = Math.min(recentCommits30d / 20, 1);
+
+              // 4. Star 得分 (权重 10%) — 10 Star 满分
+              const starScore = Math.min(stars / 10, 1);
+
+              // 5. Fork 得分 (权重 10%) — 5 Fork 满分
+              const forkScore = Math.min(forks / 5, 1);
+
+              // 加权求和
+              const score =
+                0.30 * pluginScore +
+                0.30 * freshnessScore +
+                0.20 * commitScore +
+                0.10 * starScore +
+                0.10 * forkScore;
+
+              return Math.round(score * 100) / 100; // 保留两位小数
+            }
 
       - name: Commit changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add stats.json
-          git diff --staged --quiet || git commit -m "Daily stats update $(date -u +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "📊 Daily stats update $(date -u +%Y-%m-%d)"
           git push
