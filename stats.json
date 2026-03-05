@@ -1,17 +1,74 @@
 {
-  "lastUpdated": "2026-03-05T09:13:30.091Z",
-  "repos": {},
+  "lastUpdated": "2026-03-05T09:14:58.310Z",
+  "repos": {
+    "voxrs/obsidian-translations": {
+      "authorName": "voxrs",
+      "authorId": 132795729,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/132795729?v=4",
+      "authorType": "User",
+      "authorHtmlUrl": "https://github.com/voxrs",
+      "repoName": "obsidian-translations",
+      "repoFullName": "voxrs/obsidian-translations",
+      "description": "My Obsidian plugin translations (created by obsidian-i18n)",
+      "htmlUrl": "https://github.com/voxrs/obsidian-translations",
+      "defaultBranch": "main",
+      "license": null,
+      "topics": [],
+      "isArchived": false,
+      "isFork": false,
+      "repoSize": 85,
+      "stars": 0,
+      "forks": 0,
+      "watchers": 0,
+      "openIssuesCount": 0,
+      "repoCreatedAt": "2026-02-25T11:41:17Z",
+      "repoUpdatedAt": "2026-03-04T07:20:38Z",
+      "lastPushedAt": "2026-03-04T07:20:36Z",
+      "recentCommits30d": 50,
+      "totalContributors": 1,
+      "activityScore": 0.52,
+      "pluginCount": 4,
+      "languages": [
+        "zh-cn"
+      ],
+      "pluginIds": [
+        "obsidian-git",
+        "obsidian-icon-folder"
+      ],
+      "lastManifestUpdate": "2026-03-04T07:20:36.252Z"
+    }
+  },
   "leaderboard": {
-    "topReposByStars": [],
-    "topReposByActivity": [],
-    "topAuthors": []
+    "topReposByStars": [
+      "voxrs/obsidian-translations"
+    ],
+    "topReposByActivity": [
+      "voxrs/obsidian-translations"
+    ],
+    "topAuthors": [
+      {
+        "name": "voxrs",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/132795729?v=4",
+        "htmlUrl": "https://github.com/voxrs",
+        "totalPlugins": 4,
+        "totalStars": 0,
+        "repoCount": 1,
+        "languages": [
+          "zh-cn"
+        ],
+        "activityScore": 0.52,
+        "lastActiveAt": "2026-03-04T07:20:36Z"
+      }
+    ]
   },
   "summary": {
-    "totalRepos": 0,
-    "totalPlugins": 0,
-    "totalTranslations": 0,
-    "totalContributors": 0,
+    "totalRepos": 1,
+    "totalPlugins": 2,
+    "totalTranslations": 4,
+    "totalContributors": 1,
     "totalStars": 0,
-    "languageDistribution": {}
+    "languageDistribution": {
+      "zh-cn": 4
+    }
   }
 }
