@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-03-04T07:17:26.143Z",
+  "lastUpdated": "2026-03-05T01:13:36.868Z",
   "repos": {
     "voxrs/obsidian-translations": {
       "authorName": "voxrs",
@@ -7,7 +7,7 @@
       "description": "My Obsidian plugin translations (created by obsidian-i18n)",
       "stars": 0,
       "defaultBranch": "main",
-      "pluginCount": 3,
+      "pluginCount": 4,
       "languages": [
         "zh-cn"
       ]
