@@ -27,44 +27,6 @@
             ]
         },
         {
-            "titleKey": "wizard.core_features",
-            "items": [
-                {
-                    "type": "card",
-                    "icon": "LayoutGrid",
-                    "titleKey": "wizard.plugin_title",
-                    "descriptionKey": "wizard.plugin_desc",
-                    "action": {
-                        "type": "view",
-                        "value": "manager-view"
-                    }
-                },
-                {
-                    "type": "card",
-                    "icon": "Cloud",
-                    "titleKey": "wizard.cloud_title",
-                    "descriptionKey": "wizard.cloud_desc",
-                    "action": {
-                        "type": "view",
-                        "value": "cloud-view"
-                    }
-                },
-                {
-                    "type": "card",
-                    "icon": "Settings",
-                    "titleKey": "wizard.settings_title",
-                    "descriptionKey": "wizard.settings_desc",
-                    "action": {
-                        "type": "settings"
-                    }
-                },
-                {
-                    "type": "placeholder",
-                    "textKey": "common.more_expect"
-                }
-            ]
-        },
-        {
             "titleKey": "wizard.community",
             "titleSuffix": " & ",
             "titleKey2": "wizard.support",
