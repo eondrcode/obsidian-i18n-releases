@@ -1,16 +1,17 @@
 {
-  "lastUpdated": "2026-03-05T01:13:36.868Z",
-  "repos": {
-    "voxrs/obsidian-translations": {
-      "authorName": "voxrs",
-      "avatarUrl": "https://avatars.githubusercontent.com/u/132795729?v=4",
-      "description": "My Obsidian plugin translations (created by obsidian-i18n)",
-      "stars": 0,
-      "defaultBranch": "main",
-      "pluginCount": 4,
-      "languages": [
-        "zh-cn"
-      ]
-    }
+  "lastUpdated": "2026-03-05T09:13:30.091Z",
+  "repos": {},
+  "leaderboard": {
+    "topReposByStars": [],
+    "topReposByActivity": [],
+    "topAuthors": []
+  },
+  "summary": {
+    "totalRepos": 0,
+    "totalPlugins": 0,
+    "totalTranslations": 0,
+    "totalContributors": 0,
+    "totalStars": 0,
+    "languageDistribution": {}
   }
 }
