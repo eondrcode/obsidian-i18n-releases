@@ -1,0 +1,109 @@
+{
+    "version": 1,
+    "sections": [
+        {
+            "titleKey": "wizard.title",
+            "items": [
+                {
+                    "type": "card",
+                    "icon": "PlaySquare",
+                    "titleKey": "wizard.video_title",
+                    "descriptionKey": "wizard.video_desc",
+                    "action": {
+                        "type": "url",
+                        "value": "https://www.bilibili.com/video/BV1VcxJeNExx/"
+                    }
+                },
+                {
+                    "type": "card",
+                    "icon": "BookOpen",
+                    "titleKey": "wizard.doc_title",
+                    "descriptionKey": "wizard.doc_desc",
+                    "action": {
+                        "type": "url",
+                        "value": "https://github.com/eondrcode/obsidian-i18n"
+                    }
+                }
+            ]
+        },
+        {
+            "titleKey": "wizard.core_features",
+            "items": [
+                {
+                    "type": "card",
+                    "icon": "LayoutGrid",
+                    "titleKey": "wizard.plugin_title",
+                    "descriptionKey": "wizard.plugin_desc",
+                    "action": {
+                        "type": "view",
+                        "value": "manager-view"
+                    }
+                },
+                {
+                    "type": "card",
+                    "icon": "Cloud",
+                    "titleKey": "wizard.cloud_title",
+                    "descriptionKey": "wizard.cloud_desc",
+                    "action": {
+                        "type": "view",
+                        "value": "cloud-view"
+                    }
+                },
+                {
+                    "type": "card",
+                    "icon": "Settings",
+                    "titleKey": "wizard.settings_title",
+                    "descriptionKey": "wizard.settings_desc",
+                    "action": {
+                        "type": "settings"
+                    }
+                },
+                {
+                    "type": "placeholder",
+                    "textKey": "common.more_expect"
+                }
+            ]
+        },
+        {
+            "titleKey": "wizard.community",
+            "titleSuffix": " & ",
+            "titleKey2": "wizard.support",
+            "items": [
+                {
+                    "type": "card",
+                    "icon": "Users",
+                    "titleKey": "wizard.qq_title",
+                    "descriptionKey": "wizard.qq_desc",
+                    "action": {
+                        "type": "url",
+                        "value": "https://qm.qq.com/cgi-bin/qm/qr?k=kHTS0iC1FC5igTXbdbKzff6_tc54mOF5&jump_from=webapi&authKey=AoSkriW+nDeDzBPqBl9jcpbAYkPXN2QRbrMh0hFbvMrGbqZyRAbJwaD6JKbOy4Nx"
+                    }
+                },
+                {
+                    "type": "card",
+                    "icon": "ListTodo",
+                    "titleKey": "wizard.task_title",
+                    "descriptionKey": "wizard.task_desc",
+                    "action": {
+                        "type": "url",
+                        "value": "https://github.com/eondrcode/obsidian-i18n/issues"
+                    }
+                },
+                {
+                    "type": "card",
+                    "icon": "Github",
+                    "titleKey": "wizard.github_title",
+                    "descriptionKey": "wizard.github_desc",
+                    "action": {
+                        "type": "url",
+                        "value": "https://github.com/eondrcode/obsidian-translations/issues"
+                    }
+                },
+                {
+                    "type": "placeholder",
+                    "textKey": "common.more_expect"
+                }
+            ]
+        }
+    ]
+}
